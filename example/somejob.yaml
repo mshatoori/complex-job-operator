@@ -1,0 +1,18 @@
+apiVersion: mytracks4mac.info/v1
+  kind: ComplexJob
+  metadata:
+    name: somejob
+  spec:
+    pods:
+      name: pod1
+      spec:
+        containers:
+        - name: job
+          image: nginx
+          resources:
+            limits:
+              memory: "200Mi"
+            requests:
+              memory: "100Mi"
+          ports:
+          - containerPort: 80

@@ -1,0 +1,18 @@
+ apiVersion: apiextensions.k8s.io/v1beta1
+ kind: CustomResourceDefinition
+ metadata:
+   name: complexjoboperator.mytracks4mac.info
+ spec:
+   scope: Namespaced
+   group: mytracks4mac.info
+   versions:
+     - name: v1
+       served: true
+       storage: true
+   names:
+     kind: ComplexJob
+     plural: complexjobs
+     singular: complexjob
+     shortNames:
+       - cjs
+       - cj
