@@ -7,12 +7,12 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   namespace: complex-job-operator
-  name: complex-jobs-account
+  name: complex-job-account
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole
 metadata:
-  name: complex-jobs-role-cluster
+  name: complex-job-cluster-role
 rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
@@ -21,56 +21,68 @@ rules:
   # Application: read-only access for watching cluster-wide.
   - apiGroups: [mytracks4mac.info]
     resources: [complex-jobs]
-    verbs: [list, watch]
----
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: Role
-metadata:
-  namespace: complex-job-operator
-  name: complex-jobs-role-namespaced
-rules:
-  # Framework: posting the events about the handlers progress/errors.
+    verbs: [list, watch, get]
+
   - apiGroups: [events.k8s.io]
     resources: [events]
     verbs: [create]
+
   - apiGroups: [""]
     resources: [events]
     verbs: [create]
 
-  # Application: watching & handling for the custom resource we declare.
-  - apiGroups: [mytracks4mac.info]
-    resources: [complex-jobs]
-    verbs: [list, watch, patch]
-
   - apiGroups: [""]
     resources: [pods]
-    verbs: [create]
+    verbs: [get, list, create, update, patch, watch, delete, deletecollection]
+---
+# apiVersion: rbac.authorization.k8s.io/v1beta1
+# kind: Role
+# metadata:
+#   namespace: complex-job-operator
+#   name: complex-job-role-namespaced
+# rules:
+#   # Framework: posting the events about the handlers progress/errors.
+#   - apiGroups: [events.k8s.io]
+#     resources: [events]
+#     verbs: [create]
+#   - apiGroups: [""]
+#     resources: [events]
+#     verbs: [create]
+
+#   # Application: watching & handling for the custom resource we declare.
+#   - apiGroups: [mytracks4mac.info]
+#     resources: [complex-jobs]
+#     verbs: [list, watch, patch]
+
+#   - apiGroups: [""]
+#     resources: [pods]
+#     verbs: [get, list, create, update, patch, watch, delete, deletecollection]
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
-  name: complex-jobs-rolebinding-cluster
+  name: complex-job-rolebinding-cluster
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: complex-jobs-role-cluster
+  name: complex-job-cluster-role
 subjects:
   - kind: ServiceAccount
-    name: complex-jobs-account
+    name: complex-job-account
     namespace: complex-job-operator
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: RoleBinding
-metadata:
-  namespace: complex-job-operator
-  name: complex-jobs-rolebinding-namespaced
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: complex-jobs-role-namespaced
-subjects:
-  - kind: ServiceAccount
-    name: complex-jobs-account
+# apiVersion: rbac.authorization.k8s.io/v1beta1
+# kind: RoleBinding
+# metadata:
+#   namespace: complex-job-operator
+#   name: complex-job-rolebinding-namespaced
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: Role
+#   name: complex-job-role-namespaced
+# subjects:
+#   - kind: ServiceAccount
+#     name: complex-job-account
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -89,7 +101,8 @@ spec:
       labels:
         application: complex-job-operator
     spec:
-      serviceAccountName: complex-jobs-account
+      serviceAccountName: complex-job-account
       containers:
       - name: complex-job-operator
         image: mytracks/complex-job-operator
+        imagePullPolicy: IfNotPresent

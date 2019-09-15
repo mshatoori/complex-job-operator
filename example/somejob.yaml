@@ -18,6 +18,15 @@ spec:
           - containerPort: 80
     - name: pod2
       spec:
+        initContainers:
+        - name: sleep
+          image: busybox
+          command:
+            - "sleep"
+            - "10"
+          env:
+          - name: SOME_URL
+            value: "http://{POD1_POD_IP}:12345"
         containers:
         - name: job
           image: nginx
@@ -47,4 +56,4 @@ spec:
           - name: ExistingEnv1
             value: "12345"
           - name: SOME_IP
-            value: "$POD2_POD_IP"
+            value: "{$POD2_POD_IP}"

@@ -5,6 +5,8 @@ from kubernetes.client.apis import core_v1_api
 import yaml
 import string
 
+kopf.EventsConfig.events_loglevel = kopf.config.LOGLEVEL_INFO
+
 def _get_complex_job(name, namespace):
     api = client.CustomObjectsApi()
     complex_job = api.get_namespaced_custom_object(
@@ -39,7 +41,7 @@ def _create_pod(namespace, complex_job, pod_def, logger):
     pod.spec = podSpec
 
 
-    pod.metadata.labels = {"complexJob": complex_job_name, "podName": pod_name}
+    pod.metadata.labels = {"mytracks4mac.info/complexJob": complex_job_name, "mytracks4mac.info/podName": pod_name}
     
     # Create resource in cluster
     pod_dict = pod.to_dict()
@@ -73,16 +75,12 @@ def _add_env_to_containers(pod, name, value):
             _add_env(container, name, value)
 
 def _replace_env(obj, search, replacement):
-    print("********************* 1")
     if 'env' in obj:
-        print("********************* 2")
         new_envs = []
         for env in obj['env']:
-            print("********************* 3")
             name = env['name']
             value = env['value']
             new_value = value.replace(search, replacement)
-            print(f"******* {name} {value} {new_value}")
             new_envs.append({'name': name, 'value': new_value})
 
         obj['env'] = new_envs
@@ -116,20 +114,17 @@ def complex_job_create_fn(body, spec, meta, namespace, logger, **kwargs):
 
 @kopf.on.update('mytracks4mac.info', 'v1', 'complexjobs')
 def pod_update_fn(body, spec, status, namespace, logger, **kwargs):
-    print(f"###### Complex Job updated: {body}")
+    logger.info(f"###### Complex Job updated: {body}")
 
 @kopf.on.create('', 'v1', 'pods', labels={'complexJob': None})
 def pod_create_fn(body, spec, meta, status, namespace, logger, **kwargs):
-    print(f"###### POD created: {status}")
+    logger.info(f"###### POD created: {status}")
 
-@kopf.on.update('', 'v1', 'pods', labels={'complexJob': None})
-def pod_update_fn(spec, status, meta, namespace, logger, **kwargs):
-    print(f"###### POD updated: {status}")
-
+def _pod_updated(spec, status, meta, namespace, logger):
     if status.get('phase') == "Running":
         hostIP = status.get('hostIP')
-        complex_job_name = meta['labels']['complexJob']
-        pod_name = meta['labels']['podName']
+        complex_job_name = meta['labels']['mytracks4mac.info/complexJob']
+        pod_name = meta['labels']['mytracks4mac.info/podName']
 
         complex_job = _get_complex_job(complex_job_name, namespace)
 
@@ -142,7 +137,7 @@ def pod_update_fn(spec, status, meta, namespace, logger, **kwargs):
             if create_next:
                 for additional_env in additional_envs:
                     _add_env_to_containers(pod, additional_env['name'], additional_env['value'])
-                    _replace_env_of_containers(pod, f"${additional_env['name']}", additional_env['value'])
+                    _replace_env_of_containers(pod, f"{{{additional_env['name']}}}", additional_env['value'])
                 _create_pod(namespace, complex_job, pod, logger)
                 break
 
@@ -153,6 +148,14 @@ def pod_update_fn(spec, status, meta, namespace, logger, **kwargs):
             pod_ip = pod_res.status.pod_ip
             additional_envs.append({'name': f"{pod['name'].upper()}_POD_IP", 'value': pod_ip})
 
-@kopf.on.field('', 'v1', 'pods', field='status.phase', labels={'complexJob': None})
-def somefield_changed(old, new, **_):
-    print(f"###### phase updated {new}")
+@kopf.on.update('', 'v1', 'pods', labels={'complexJob': None})
+def pod_update_fn(spec, status, meta, namespace, logger, **kwargs):
+    logger.info(f"###### POD updated: {status}")
+
+    _pod_updated(spec, status, meta, namespace, logger)
+
+@kopf.on.field('', 'v1', 'pods', field='status.phase', labels={'mytracks4mac.info/complexJob': None})
+def somefield_changed(old, new, spec, status, meta, namespace, logger, **_):
+    logger.info(f"###### phase updated {spec}")
+
+    _pod_updated(spec, status, meta, namespace, logger)
