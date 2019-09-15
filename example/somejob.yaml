@@ -46,5 +46,5 @@ spec:
           env:
           - name: ExistingEnv1
             value: "12345"
-          - name: ExistingEnv2
-            value: "sdfsdfsd"
+          - name: SOME_IP
+            value: "$POD2_POD_IP"

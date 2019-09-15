@@ -1,7 +1,9 @@
 import kopf
 import os
 from kubernetes import client
+from kubernetes.client.apis import core_v1_api
 import yaml
+import string
 
 def _get_complex_job(name, namespace):
     api = client.CustomObjectsApi()
@@ -14,6 +16,11 @@ def _get_complex_job(name, namespace):
     )
 
     return complex_job
+
+def _get_pod(name, namespace):
+    pod = core_v1_api.CoreV1Api().read_namespaced_pod(name=name, namespace=namespace)
+
+    return pod
 
 def _create_pod(namespace, complex_job, pod_def, logger):
     api = client.CoreV1Api()
@@ -52,10 +59,47 @@ def _add_env(obj, name, value):
     obj['env'].append({'name': name, 'value': value})
 
 def _add_env_to_containers(pod, name, value):
-    containers = pod['spec']['containers']
+    spec = pod['spec']
+    if 'containers' in spec:
+        containers = spec['containers']
 
-    for container in containers:
-        _add_env(container, name, value)
+        for container in containers:
+            _add_env(container, name, value)
+
+    if 'initContainers' in spec:
+        init_containers = pod['spec']['initContainers']
+
+        for container in init_containers:
+            _add_env(container, name, value)
+
+def _replace_env(obj, search, replacement):
+    print("********************* 1")
+    if 'env' in obj:
+        print("********************* 2")
+        new_envs = []
+        for env in obj['env']:
+            print("********************* 3")
+            name = env['name']
+            value = env['value']
+            new_value = value.replace(search, replacement)
+            print(f"******* {name} {value} {new_value}")
+            new_envs.append({'name': name, 'value': new_value})
+
+        obj['env'] = new_envs
+
+def _replace_env_of_containers(pod, search, replacement):
+    spec = pod['spec']
+    if 'containers' in spec:
+        containers = spec['containers']
+
+        for container in containers:
+            _replace_env(container, search, replacement)
+
+    if 'initContainers' in spec:
+        init_containers = pod['spec']['initContainers']
+
+        for container in init_containers:
+            _replace_env(container, search, replacement)
 
 @kopf.on.create('mytracks4mac.info', 'v1', 'complexjobs')
 def complex_job_create_fn(body, spec, meta, namespace, logger, **kwargs):
@@ -89,22 +133,25 @@ def pod_update_fn(spec, status, meta, namespace, logger, **kwargs):
 
         complex_job = _get_complex_job(complex_job_name, namespace)
 
-        print(f"*************** Pod is running: {hostIP}")
-
         # Try to find next pod
         pods = complex_job['spec']['pods']
 
         create_next = False
+        additional_envs = []
         for pod in pods:
             if create_next:
-                print("########### Create another pod")
-                _add_env_to_containers(pod, "foo", "bar")
-                _add_env_to_containers(pod, "Horst", "Krause")
+                for additional_env in additional_envs:
+                    _add_env_to_containers(pod, additional_env['name'], additional_env['value'])
+                    _replace_env_of_containers(pod, f"${additional_env['name']}", additional_env['value'])
                 _create_pod(namespace, complex_job, pod, logger)
                 break
 
             if pod['name'] == pod_name:
                 create_next = True
+
+            pod_res = _get_pod(f"{complex_job_name}-{pod['name']}", namespace)
+            pod_ip = pod_res.status.pod_ip
+            additional_envs.append({'name': f"{pod['name'].upper()}_POD_IP", 'value': pod_ip})
 
 @kopf.on.field('', 'v1', 'pods', field='status.phase', labels={'complexJob': None})
 def somefield_changed(old, new, **_):
